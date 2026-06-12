@@ -20,6 +20,12 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
+  /** Sandbox execution service (apps/sandbox). */
+  SANDBOX_URL: z.string().url().default('http://localhost:8788'),
+  /** Per-execution wall clock limit forwarded to the sandbox. */
+  SANDBOX_EXECUTE_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
+  /** Maximum model steps (tool-call rounds) per agent turn. */
+  AGENT_MAX_STEPS: z.coerce.number().int().positive().max(32).default(8),
 });
 
 export type Env = z.infer<typeof envSchema>;

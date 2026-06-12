@@ -1,22 +1,27 @@
 import cors from '@fastify/cors';
+import { createLanguageModel } from '@hyperagent/ai';
 import type { Db } from '@hyperagent/db';
 import { API_ERROR_CODES, API_PATHS, healthResponseSchema, SERVICES } from '@hyperagent/shared';
 import Fastify from 'fastify';
 import { ZodError } from 'zod';
 
 import type { Env } from './env.js';
-import { AppSecretMissingError, NotFoundError } from './errors.js';
+import { AppSecretMissingError, NotFoundError, ProviderKeyMissingError } from './errors.js';
 import { registerProviderRoutes } from './routes/providers.js';
 import { registerSettingRoutes } from './routes/settings.js';
+import type { ModelFactory } from './routes/stream.js';
+import { registerStreamRoutes } from './routes/stream.js';
 import { registerThreadRoutes } from './routes/threads.js';
 import { SettingsService } from './services/settings.js';
 
-export const SERVER_VERSION = '0.2.0';
+export const SERVER_VERSION = '0.3.0';
 
 export interface AppDeps {
   db: Db;
   /** Overridable in tests to exercise env-vs-database key resolution. */
   envSource?: NodeJS.ProcessEnv;
+  /** Overridable in tests to inject mock language models. */
+  modelFactory?: ModelFactory;
 }
 
 /**
@@ -54,6 +59,12 @@ export async function buildApp(env: Env, deps: AppDeps) {
         .send({ error: { message: error.message, code: API_ERROR_CODES.appSecretMissing } });
     }
 
+    if (error instanceof ProviderKeyMissingError) {
+      return reply
+        .code(400)
+        .send({ error: { message: error.message, code: API_ERROR_CODES.providerKeyMissing } });
+    }
+
     request.log.error(error);
     return reply
       .code(500)
@@ -71,12 +82,23 @@ export async function buildApp(env: Env, deps: AppDeps) {
   );
 
   const settingsService = new SettingsService(deps.db, env.APP_SECRET);
+  const envSource = deps.envSource ?? process.env;
+  const modelFactory: ModelFactory =
+    deps.modelFactory ??
+    (({ providerId, modelId, apiKey }) => createLanguageModel({ providerId, modelId, apiKey }));
 
   await app.register(
     async (api) => {
       registerThreadRoutes(api, deps.db);
       registerSettingRoutes(api, settingsService);
-      registerProviderRoutes(api, settingsService, deps.envSource ?? process.env);
+      registerProviderRoutes(api, settingsService, envSource);
+      registerStreamRoutes(api, {
+        db: deps.db,
+        env,
+        settings: settingsService,
+        envSource,
+        modelFactory,
+      });
     },
     { prefix: '/api' },
   );

@@ -46,14 +46,47 @@ describe('runMigrations', () => {
     const [run] = await db.insert(schema.runs).values({ threadId: thread!.id }).returning();
     expect(run?.status).toBe('queued');
 
+    const [llmCall] = await db
+      .insert(schema.llmCalls)
+      .values({
+        runId: run!.id,
+        threadId: thread!.id,
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5',
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        latencyMs: 420,
+        finishReason: 'stop',
+      })
+      .returning();
+    expect(llmCall?.totalTokens).toBe(15);
+
+    const [toolCall] = await db
+      .insert(schema.toolCalls)
+      .values({
+        runId: run!.id,
+        threadId: thread!.id,
+        toolName: 'execute_code',
+        args: { language: 'python', code: 'print(1)' },
+        result: { stdout: '1\n' },
+        latencyMs: 88,
+      })
+      .returning();
+    expect(toolCall?.status).toBe('completed');
+
     await db.insert(schema.settings).values({ key: 'theme', value: 'dark', encrypted: false });
 
-    // Cascade: deleting the thread removes messages and runs.
+    // Cascade: deleting the thread removes messages, runs, and run telemetry.
     await db.delete(schema.threads).where(eq(schema.threads.id, thread!.id));
     const remainingMessages = await db.select().from(schema.messages);
     const remainingRuns = await db.select().from(schema.runs);
+    const remainingLlmCalls = await db.select().from(schema.llmCalls);
+    const remainingToolCalls = await db.select().from(schema.toolCalls);
     expect(remainingMessages).toEqual([]);
     expect(remainingRuns).toEqual([]);
+    expect(remainingLlmCalls).toEqual([]);
+    expect(remainingToolCalls).toEqual([]);
 
     // Settings survive (no FK to threads).
     const remainingSettings = await db.select().from(schema.settings);

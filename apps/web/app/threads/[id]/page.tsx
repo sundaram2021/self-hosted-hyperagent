@@ -1,37 +1,74 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Message, Thread } from '@hyperagent/shared';
+import type { Message, MessagePart, ProviderModels, Thread } from '@hyperagent/shared';
 
+import { Markdown } from '@/components/markdown';
+import { ModelPicker, type ModelSelection } from '@/components/model-picker';
+import { ToolCallCard, type ToolCallView } from '@/components/tool-call-card';
 import {
   ApiError,
   deleteThread,
   emitThreadsChanged,
   getThread,
   listMessages,
+  listModels,
   renameThread,
-  sendUserMessage,
+  streamChat,
 } from '@/lib/api';
 
-function MessageBubble({ message }: { message: Message }) {
+type LiveToolPart = ToolCallView & { type: 'tool-call'; [key: string]: unknown };
+
+function isToolPart(part: MessagePart): part is MessagePart & LiveToolPart {
+  return part.type === 'tool-call';
+}
+
+function PartView({ part }: { part: MessagePart }) {
+  if (part.type === 'text' && 'text' in part) {
+    return <Markdown>{String(part.text)}</Markdown>;
+  }
+  if (isToolPart(part)) {
+    return (
+      <ToolCallCard
+        tool={{
+          toolCallId: String(part.toolCallId ?? ''),
+          toolName: String(part.toolName ?? 'tool'),
+          args: part.args,
+          result: part.result,
+          status: (part.status as ToolCallView['status']) ?? 'completed',
+          latencyMs: typeof part.latencyMs === 'number' ? part.latencyMs : null,
+        }}
+      />
+    );
+  }
+  return <p className="text-xs text-zinc-600">[{part.type}]</p>;
+}
+
+function MessageView({ role, parts }: { role: Message['role']; parts: MessagePart[] }) {
+  const isUser = role === 'user';
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-        {message.role}
+        {isUser ? 'you' : role}
       </span>
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm leading-relaxed text-zinc-200">
-        {message.parts.map((part, index) =>
-          part.type === 'text' && 'text' in part ? (
-            <p key={index} className="whitespace-pre-wrap">
-              {String(part.text)}
-            </p>
-          ) : (
-            <p key={index} className="text-zinc-500">
-              [{part.type}]
-            </p>
-          ),
+      <div
+        className={
+          isUser
+            ? 'self-start rounded-lg bg-emerald-950/40 px-4 py-3 text-sm leading-relaxed text-zinc-100'
+            : 'flex flex-col gap-2.5'
+        }
+      >
+        {isUser ? (
+          <p className="whitespace-pre-wrap">
+            {parts
+              .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+              .map((p) => p.text)
+              .join('\n')}
+          </p>
+        ) : (
+          parts.map((part, index) => <PartView key={index} part={part} />)
         )}
       </div>
     </div>
@@ -45,18 +82,42 @@ export default function ThreadPage() {
 
   const [thread, setThread] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [liveParts, setLiveParts] = useState<MessagePart[] | null>(null);
+  const [providers, setProviders] = useState<ProviderModels[]>([]);
+  const [selection, setSelection] = useState<ModelSelection>({ provider: '', model: '' });
   const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const selectionReady = selection.provider !== '' && selection.model !== '';
+
+  const defaultSelection = useCallback((t: Thread | null, p: ProviderModels[]): ModelSelection => {
+    if (t?.lastProvider && t.lastModel) {
+      return { provider: t.lastProvider, model: t.lastModel };
+    }
+    const withKey = p.find((entry) => entry.keySource !== 'none' && entry.models.length > 0);
+    const fallback = withKey ?? p[0];
+    return {
+      provider: fallback?.id ?? '',
+      model: fallback?.models[0]?.id ?? '',
+    };
+  }, []);
 
   const load = useCallback(async () => {
     try {
-      const [t, m] = await Promise.all([getThread(threadId), listMessages(threadId)]);
+      const [t, m, p] = await Promise.all([
+        getThread(threadId),
+        listMessages(threadId),
+        listModels(),
+      ]);
       setThread(t);
       setMessages(m);
+      setProviders(p);
+      setSelection((current) => (current.provider ? current : defaultSelection(t, p)));
       setError(null);
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
@@ -65,7 +126,7 @@ export default function ThreadPage() {
       }
       setError(e instanceof Error ? e.message : 'Failed to load thread');
     }
-  }, [threadId, router]);
+  }, [threadId, router, defaultSelection]);
 
   useEffect(() => {
     void load();
@@ -73,23 +134,107 @@ export default function ThreadPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [messages.length, liveParts]);
+
+  const appendLiveText = useCallback((delta: string) => {
+    setLiveParts((parts) => {
+      const next = [...(parts ?? [])];
+      const last = next[next.length - 1];
+      if (last && last.type === 'text' && 'text' in last) {
+        next[next.length - 1] = { type: 'text', text: String(last.text) + delta };
+      } else {
+        next.push({ type: 'text', text: delta });
+      }
+      return next;
+    });
+  }, []);
 
   async function onSend() {
     const text = draft.trim();
-    if (!text || sending) return;
-    setSending(true);
+    if (!text || streaming || !selectionReady) return;
+
+    setStreaming(true);
     setError(null);
+    setDraft('');
+
+    // Optimistic user message; replaced by server truth after the stream.
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `optimistic-${Date.now()}`,
+        threadId,
+        role: 'user',
+        parts: [{ type: 'text', text }],
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    setLiveParts([]);
+
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
     try {
-      const message = await sendUserMessage(threadId, text);
-      setMessages((prev) => [...prev, message]);
-      setDraft('');
-      emitThreadsChanged();
+      for await (const event of streamChat(
+        threadId,
+        { text, provider: selection.provider as never, model: selection.model },
+        abortController.signal,
+      )) {
+        switch (event.type) {
+          case 'text-delta':
+            appendLiveText(event.delta);
+            break;
+          case 'tool-call':
+            setLiveParts((parts) => [
+              ...(parts ?? []),
+              {
+                type: 'tool-call',
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+                args: event.args,
+                status: 'pending',
+              },
+            ]);
+            break;
+          case 'tool-result':
+            setLiveParts((parts) =>
+              (parts ?? []).map((part) =>
+                isToolPart(part) && part.toolCallId === event.toolCallId
+                  ? {
+                      ...part,
+                      result: event.result,
+                      status: event.status,
+                      latencyMs: event.latencyMs ?? undefined,
+                    }
+                  : part,
+              ),
+            );
+            break;
+          case 'run-error':
+            setError(event.message);
+            break;
+          default:
+            break;
+        }
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to send');
+      setError(e instanceof Error ? e.message : 'Stream failed');
     } finally {
-      setSending(false);
+      abortRef.current = null;
+      setStreaming(false);
+      setLiveParts(null);
+      try {
+        const [m, t] = await Promise.all([listMessages(threadId), getThread(threadId)]);
+        setMessages(m);
+        setThread(t);
+      } catch {
+        // Keep optimistic state if the reload fails; next interaction retries.
+      }
+      emitThreadsChanged();
     }
+  }
+
+  function onStop() {
+    abortRef.current?.abort();
   }
 
   async function onRename() {
@@ -115,6 +260,12 @@ export default function ThreadPage() {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
   }
+
+  const showEmptyState = messages.length === 0 && liveParts === null;
+  const currentProvider = useMemo(
+    () => providers.find((p) => p.id === selection.provider),
+    [providers, selection.provider],
+  );
 
   return (
     <div className="flex h-screen flex-col">
@@ -152,19 +303,22 @@ export default function ThreadPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto flex max-w-2xl flex-col gap-4">
-          <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-4 py-2.5 text-xs text-emerald-300">
-            Persistence is live — messages are stored in Postgres. Agent responses arrive in Phase 3
-            (multi-provider loop).
-          </div>
-
+        <div className="mx-auto flex max-w-2xl flex-col gap-5">
           {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+            <MessageView key={message.id} role={message.role} parts={message.parts} />
           ))}
 
-          {messages.length === 0 ? (
+          {liveParts !== null ? <MessageView role="assistant" parts={liveParts} /> : null}
+
+          {streaming && liveParts !== null && liveParts.length === 0 ? (
+            <p className="text-xs text-zinc-500">Thinking…</p>
+          ) : null}
+
+          {showEmptyState ? (
             <p className="py-8 text-center text-sm text-zinc-600">
-              No messages yet. Say something below.
+              {currentProvider?.keySource === 'none'
+                ? 'Pick a provider with a configured key (or add one in Settings), then say hello.'
+                : 'Say something below — the agent replies with your selected model.'}
             </p>
           ) : null}
           <div ref={bottomRef} />
@@ -172,8 +326,16 @@ export default function ThreadPage() {
       </div>
 
       <footer className="border-t border-zinc-800 px-6 py-4">
-        <div className="mx-auto flex max-w-2xl flex-col gap-2">
+        <div className="mx-auto flex max-w-2xl flex-col gap-2.5">
           {error ? <p className="text-xs text-red-400">{error}</p> : null}
+
+          <ModelPicker
+            providers={providers}
+            value={selection}
+            onChange={setSelection}
+            disabled={streaming}
+          />
+
           <div className="flex items-end gap-2">
             <textarea
               value={draft}
@@ -188,13 +350,22 @@ export default function ThreadPage() {
               placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
               className="flex-1 resize-none rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-emerald-500"
             />
-            <button
-              onClick={() => void onSend()}
-              disabled={sending || draft.trim().length === 0}
-              className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-emerald-950 transition hover:bg-emerald-400 disabled:opacity-40"
-            >
-              {sending ? 'Saving…' : 'Send'}
-            </button>
+            {streaming ? (
+              <button
+                onClick={onStop}
+                className="rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-red-800 hover:text-red-400"
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={() => void onSend()}
+                disabled={draft.trim().length === 0 || !selectionReady}
+                className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-emerald-950 transition hover:bg-emerald-400 disabled:opacity-40"
+              >
+                Send
+              </button>
+            )}
           </div>
         </div>
       </footer>

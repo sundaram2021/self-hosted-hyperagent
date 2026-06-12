@@ -13,6 +13,7 @@ export const API_ERROR_CODES = {
   validation: 'VALIDATION',
   notFound: 'NOT_FOUND',
   appSecretMissing: 'APP_SECRET_MISSING',
+  providerKeyMissing: 'PROVIDER_KEY_MISSING',
   internal: 'INTERNAL',
 } as const;
 

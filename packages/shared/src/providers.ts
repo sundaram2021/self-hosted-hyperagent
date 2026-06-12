@@ -101,6 +101,28 @@ export const PROVIDERS: readonly ProviderInfo[] = [
 export const keySourceSchema = z.enum(['env', 'database', 'none']);
 export type KeySource = z.infer<typeof keySourceSchema>;
 
+/** A model catalog entry. Pricing is USD per million tokens; null = unknown. */
+export const modelInfoSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  pricing: z
+    .object({
+      inputPerMTok: z.number(),
+      outputPerMTok: z.number(),
+    })
+    .nullable(),
+});
+export type ModelInfo = z.infer<typeof modelInfoSchema>;
+
+/** GET /api/models response item: provider status plus its model catalog. */
+export const providerModelsSchema = z.object({
+  id: providerIdSchema,
+  label: z.string(),
+  keySource: keySourceSchema,
+  models: z.array(modelInfoSchema),
+});
+export type ProviderModels = z.infer<typeof providerModelsSchema>;
+
 /** GET /api/providers response item. */
 export const providerStatusSchema = z.object({
   id: providerIdSchema,

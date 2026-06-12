@@ -61,6 +61,46 @@ export const MIGRATIONS: readonly Migration[] = [
       )`,
     ],
   },
+  {
+    id: '0002_agent_loop_telemetry',
+    statements: [
+      `ALTER TABLE threads ADD COLUMN last_provider text`,
+      `ALTER TABLE threads ADD COLUMN last_model text`,
+      `ALTER TABLE messages ADD COLUMN run_id text`,
+      `ALTER TABLE runs ADD COLUMN input_tokens integer`,
+      `ALTER TABLE runs ADD COLUMN output_tokens integer`,
+      `ALTER TABLE runs ADD COLUMN total_tokens integer`,
+      `CREATE TABLE llm_calls (
+        id text PRIMARY KEY,
+        run_id text NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        thread_id text NOT NULL,
+        provider text NOT NULL,
+        model text NOT NULL,
+        input_tokens integer,
+        output_tokens integer,
+        total_tokens integer,
+        latency_ms integer,
+        finish_reason text,
+        error text,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX llm_calls_run_idx ON llm_calls (run_id)`,
+      `CREATE INDEX llm_calls_created_idx ON llm_calls (created_at)`,
+      `CREATE TABLE tool_calls (
+        id text PRIMARY KEY,
+        run_id text NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        thread_id text NOT NULL,
+        tool_name text NOT NULL,
+        args jsonb,
+        result jsonb,
+        status text NOT NULL DEFAULT 'completed' CHECK (status IN ('completed', 'failed')),
+        latency_ms integer,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX tool_calls_run_idx ON tool_calls (run_id)`,
+      `CREATE INDEX tool_calls_created_idx ON tool_calls (created_at)`,
+    ],
+  },
 ];
 
 interface RowsResult {

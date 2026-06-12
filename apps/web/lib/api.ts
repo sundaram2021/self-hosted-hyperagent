@@ -2,10 +2,15 @@ import type { z } from 'zod';
 import {
   apiErrorSchema,
   messageSchema,
+  providerModelsSchema,
   providerStatusSchema,
+  streamEventSchema,
   threadSchema,
+  type AgentStreamEvent,
   type Message,
+  type ProviderModels,
   type ProviderStatus,
+  type StreamRequest,
   type TextPart,
   type Thread,
 } from '@hyperagent/shared';
@@ -103,7 +108,86 @@ export function sendUserMessage(threadId: string, text: string): Promise<Message
   });
 }
 
-// --- Providers ---
+// --- Streaming chat ---
+
+/**
+ * Send a user message and stream the agent's turn as parsed SSE events.
+ * Unknown event shapes are skipped (forward compatibility with later phases).
+ */
+export async function* streamChat(
+  threadId: string,
+  body: StreamRequest,
+  signal?: AbortSignal,
+): AsyncGenerator<AgentStreamEvent> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}/api/threads/${threadId}/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: signal ?? null,
+    });
+  } catch {
+    if (signal?.aborted) return;
+    throw new ApiError(
+      `Cannot reach the agent server at ${BASE_URL}. Is it running? (pnpm dev)`,
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    let code: string | undefined;
+    try {
+      const parsed = apiErrorSchema.parse(await response.json());
+      message = parsed.error.message;
+      code = parsed.error.code;
+    } catch {
+      // keep generic message
+    }
+    throw new ApiError(message, response.status, code);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new ApiError('Streaming not supported by this browser', 0);
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let separatorIndex = buffer.indexOf('\n\n');
+      while (separatorIndex !== -1) {
+        const frame = buffer.slice(0, separatorIndex);
+        buffer = buffer.slice(separatorIndex + 2);
+        separatorIndex = buffer.indexOf('\n\n');
+
+        const dataLine = frame.split('\n').find((line) => line.startsWith('data: '));
+        if (!dataLine) continue;
+
+        try {
+          const parsed = streamEventSchema.safeParse(JSON.parse(dataLine.slice(6)));
+          if (parsed.success) yield parsed.data;
+        } catch {
+          // Skip malformed frames rather than killing the stream.
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// --- Models & providers ---
+
+export function listModels(): Promise<ProviderModels[]> {
+  return request('/api/models', providerModelsSchema.array());
+}
 
 export function listProviders(): Promise<ProviderStatus[]> {
   return request('/api/providers', providerStatusSchema.array());
