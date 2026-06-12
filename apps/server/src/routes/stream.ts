@@ -3,14 +3,17 @@ import { messages, runs, threads } from '@hyperagent/db';
 import type { AgentStreamEvent, ProviderModels, Run } from '@hyperagent/shared';
 import { PROVIDERS, streamRequestSchema } from '@hyperagent/shared';
 import { MODEL_CATALOG } from '@hyperagent/ai';
-import type { LanguageModel, ToolSet } from 'ai';
+import type { LanguageModel } from 'ai';
 import { desc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
-import { createExecuteCodeTool } from '../agent/tools/execute-code.js';
+import { buildRunTools } from '../agent/build-tools.js';
 import { runAgentTurn } from '../agent/run-agent.js';
+import { buildSystemPrompt } from '../agent/system-prompt.js';
 import type { Env } from '../env.js';
 import { NotFoundError } from '../errors.js';
+import type { McpManager } from '../mcp/manager.js';
+import type { McpServerService } from '../services/mcp-servers.js';
 import { resolveKeySource, resolveProviderKey } from '../services/provider-keys.js';
 import type { SettingsService } from '../services/settings.js';
 import type { RunRow } from '@hyperagent/db';
@@ -27,6 +30,8 @@ export interface StreamRouteDeps {
   settings: SettingsService;
   envSource: NodeJS.ProcessEnv;
   modelFactory: ModelFactory;
+  mcpService: McpServerService;
+  mcpManager: McpManager;
 }
 
 const idParamSchema = { type: 'object', properties: { id: { type: 'string' } } } as const;
@@ -46,7 +51,7 @@ function serializeRun(row: RunRow): Run {
 }
 
 export function registerStreamRoutes(app: FastifyInstance, deps: StreamRouteDeps): void {
-  const { db, env, settings, envSource, modelFactory } = deps;
+  const { db, env, settings, envSource, modelFactory, mcpService, mcpManager } = deps;
 
   /** Model catalog grouped by provider, with key availability. */
   app.get('/models', async (): Promise<ProviderModels[]> => {
@@ -127,12 +132,15 @@ export function registerStreamRoutes(app: FastifyInstance, deps: StreamRouteDeps
         if (!reply.raw.writableEnded) abortController.abort();
       });
 
-      const tools: ToolSet = {
-        execute_code: createExecuteCodeTool({
-          sandboxUrl: env.SANDBOX_URL,
-          timeoutMs: env.SANDBOX_EXECUTE_TIMEOUT_MS,
-        }),
-      };
+      const { tools, skills } = await buildRunTools({
+        db,
+        env,
+        envSource,
+        settings,
+        mcpService,
+        mcpManager,
+        logger: request.log,
+      });
 
       try {
         await runAgentTurn({
@@ -142,6 +150,7 @@ export function registerStreamRoutes(app: FastifyInstance, deps: StreamRouteDeps
           model: body.model,
           languageModel,
           tools,
+          system: buildSystemPrompt({ toolsAvailable: Object.keys(tools), skills }),
           maxSteps: env.AGENT_MAX_STEPS,
           signal: abortController.signal,
           onEvent: send,
