@@ -1,1 +1,0 @@
-## Self Hosted Hyper Agent
