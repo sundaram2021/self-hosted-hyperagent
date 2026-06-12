@@ -41,6 +41,9 @@ export type Message = z.infer<typeof messageSchema>;
 export const threadSchema = z.object({
   id: z.string(),
   title: z.string(),
+  /** Last provider/model used in this thread; preselects the model picker. */
+  lastProvider: z.string().nullable(),
+  lastModel: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
