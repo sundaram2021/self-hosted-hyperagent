@@ -6,6 +6,8 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { Env } from '../env.js';
 import type { McpManager } from '../mcp/manager.js';
 import { mcpToolsToToolSet } from '../mcp/tools.js';
+import { createMemoryTools } from '../memory/tools.js';
+import type { MemoryService } from '../memory/service.js';
 import type { McpServerService } from '../services/mcp-servers.js';
 import type { SettingsService } from '../services/settings.js';
 import { createSkillTools, listEnabledSkills } from '../skills/tools.js';
@@ -19,6 +21,9 @@ export interface BuildToolsDeps {
   settings: SettingsService;
   mcpService: McpServerService;
   mcpManager: McpManager;
+  /** Present when MEMORY_ENABLED; adds memory_save / memory_search. */
+  memoryService?: MemoryService | null;
+  threadId?: string;
   logger?: FastifyBaseLogger;
   fetchImpl?: typeof fetch;
 }
@@ -63,6 +68,11 @@ export async function buildRunTools(deps: BuildToolsDeps): Promise<BuiltTools> {
   const enabledSkills = await listEnabledSkills(deps.db);
   if (enabledSkills.length > 0) {
     Object.assign(tools, createSkillTools(deps.db));
+  }
+
+  // Memory tools (Phase 8).
+  if (deps.memoryService) {
+    Object.assign(tools, createMemoryTools(deps.memoryService, deps.threadId ?? 'unknown'));
   }
 
   // MCP servers.
