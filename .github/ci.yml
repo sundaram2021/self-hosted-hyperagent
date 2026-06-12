@@ -31,13 +31,14 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # TODO(phase-2): switch to --frozen-lockfile once pnpm-lock.yaml is committed
-      # (lockfile generation is blocked in the authoring environment; tracked in PR #1)
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
 
       - name: Typecheck
         run: pnpm typecheck
