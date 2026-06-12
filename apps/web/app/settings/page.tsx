@@ -2,9 +2,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import type { ProviderStatus } from '@hyperagent/shared';
+import type { IntegrationStatus, ProviderStatus } from '@hyperagent/shared';
 
-import { deleteProviderKey, listProviders, saveProviderKey } from '@/lib/api';
+import {
+  deleteIntegrationKey,
+  deleteProviderKey,
+  listIntegrations,
+  listProviders,
+  saveIntegrationKey,
+  saveProviderKey,
+} from '@/lib/api';
 
 function KeySourceBadge({ source }: { source: ProviderStatus['keySource'] }) {
   if (source === 'env') {
@@ -124,14 +131,114 @@ function ProviderRow({
   );
 }
 
+function IntegrationRow({
+  integration,
+  onChanged,
+  onError,
+}: {
+  integration: IntegrationStatus;
+  onChanged: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function onSave() {
+    const apiKey = draft.trim();
+    if (!apiKey) return;
+    setBusy(true);
+    onError(null);
+    try {
+      await saveIntegrationKey(integration.id, apiKey);
+      setDraft('');
+      onChanged();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to save key');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRemove() {
+    setBusy(true);
+    onError(null);
+    try {
+      await deleteIntegrationKey(integration.id);
+      onChanged();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Failed to remove key');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="text-sm font-medium text-zinc-200">{integration.label}</span>
+          <KeySourceBadge source={integration.keySource} />
+        </div>
+        <a
+          href={integration.keyUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-zinc-500 hover:text-emerald-400"
+        >
+          Get a key ↗
+        </a>
+      </div>
+      <p className="text-xs text-zinc-500">{integration.description}</p>
+
+      {integration.keySource === 'env' ? (
+        <p className="text-xs text-zinc-500">
+          Using <code className="rounded bg-zinc-900 px-1 py-0.5">{integration.keyEnvVar}</code>{' '}
+          from the environment (overrides any stored key).
+        </p>
+      ) : (
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={
+              integration.keySource === 'database' ? 'Replace stored key…' : 'Paste API key…'
+            }
+            className="flex-1 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-emerald-500"
+          />
+          <button
+            onClick={() => void onSave()}
+            disabled={busy || draft.trim().length === 0}
+            className="rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-emerald-950 hover:bg-emerald-400 disabled:opacity-40"
+          >
+            Save
+          </button>
+          {integration.keySource === 'database' ? (
+            <button
+              onClick={() => void onRemove()}
+              disabled={busy}
+              className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-400 hover:border-red-900 hover:text-red-400 disabled:opacity-40"
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
+  const [integrations, setIntegrations] = useState<IntegrationStatus[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appSecretMissing, setAppSecretMissing] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      setProviders(await listProviders());
+      const [p, i] = await Promise.all([listProviders(), listIntegrations()]);
+      setProviders(p);
+      setIntegrations(i);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load providers');
     }
@@ -178,6 +285,22 @@ export default function SettingsPage() {
             <ProviderRow
               key={provider.id}
               provider={provider}
+              onChanged={() => void refresh()}
+              onError={handleError}
+            />
+          ))
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-zinc-300">Integrations</h2>
+        {integrations === null ? (
+          <p className="text-sm text-zinc-600">Loading…</p>
+        ) : (
+          integrations.map((integration) => (
+            <IntegrationRow
+              key={integration.id}
+              integration={integration}
               onChanged={() => void refresh()}
               onError={handleError}
             />
