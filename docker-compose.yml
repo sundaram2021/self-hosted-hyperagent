@@ -10,11 +10,11 @@ services:
       POSTGRES_PASSWORD: hyperagent
       POSTGRES_DB: hyperagent
     ports:
-      - "127.0.0.1:5432:5432"
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hyperagent -d hyperagent"]
+      test: ['CMD-SHELL', 'pg_isready -U hyperagent -d hyperagent']
       interval: 5s
       timeout: 5s
       retries: 10
