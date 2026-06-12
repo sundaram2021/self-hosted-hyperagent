@@ -124,9 +124,47 @@ export const settings = pgTable('settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 });
 
+/**
+ * Registered MCP servers. `env` and `headers` may contain secrets, so they
+ * are stored as JSON serialized through the secret-encryption layer
+ * (enc:v1 payloads when APP_SECRET is configured).
+ */
+export const mcpServers = pgTable('mcp_servers', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  name: text('name').notNull().unique(),
+  transport: text('transport', { enum: ['stdio', 'http', 'sse'] }).notNull(),
+  command: text('command'),
+  args: jsonb('args').$type<string[]>(),
+  env: text('env'),
+  url: text('url'),
+  headers: text('headers'),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+});
+
+/** Installed Agent Skills (SKILL.md format) with bundled files inline. */
+export const skills = pgTable('skills', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  name: text('name').notNull().unique(),
+  description: text('description').notNull().default(''),
+  source: text('source').notNull(),
+  content: text('content').notNull(),
+  files: jsonb('files').notNull().default([]).$type<Array<{ path: string; content: string }>>(),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+});
+
 export type ThreadRow = typeof threads.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;
 export type SettingRow = typeof settings.$inferSelect;
 export type LlmCallRow = typeof llmCalls.$inferSelect;
 export type ToolCallRow = typeof toolCalls.$inferSelect;
+export type McpServerRow = typeof mcpServers.$inferSelect;
+export type SkillRow = typeof skills.$inferSelect;
