@@ -5,8 +5,6 @@ import type { LanguageModel, ModelMessage, ToolSet } from 'ai';
 import { stepCountIs, streamText } from 'ai';
 import { eq } from 'drizzle-orm';
 
-import { buildSystemPrompt } from './system-prompt.js';
-
 export interface RunAgentOptions {
   db: Db;
   threadId: string;
@@ -14,6 +12,8 @@ export interface RunAgentOptions {
   model: string;
   languageModel: LanguageModel;
   tools: ToolSet;
+  /** Fully assembled system prompt (see buildSystemPrompt + buildRunTools). */
+  system: string;
   maxSteps: number;
   signal: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
@@ -80,7 +80,7 @@ export function historyToModelMessages(
  * run fails or is aborted mid-stream.
  */
 export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentResult> {
-  const { db, threadId, provider, model, languageModel, tools, maxSteps, signal, onEvent } =
+  const { db, threadId, provider, model, languageModel, tools, system, maxSteps, signal, onEvent } =
     options;
 
   const [run] = await db
@@ -124,7 +124,7 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   try {
     const result = streamText({
       model: languageModel,
-      system: buildSystemPrompt({ toolsAvailable: Object.keys(tools) }),
+      system,
       messages: historyToModelMessages(history),
       tools,
       stopWhen: stepCountIs(maxSteps),
