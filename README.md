@@ -74,5 +74,3 @@ uv run uvicorn app.main:app --port 8788 --reload
 ```
 
 Useful commands: `pnpm build` · `pnpm test` · `pnpm lint` · `pnpm typecheck` · `cd apps/sandbox && uv run pytest`
-
-> **Security note:** there is no authentication in v1 — services bind to `127.0.0.1`. For reverse-proxy setups, backups, upgrades, MCP-in-Docker, and troubleshooting, see **[SELF_HOSTING.md](./SELF_HOSTING.md)**.
