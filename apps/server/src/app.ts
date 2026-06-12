@@ -7,14 +7,20 @@ import { ZodError } from 'zod';
 
 import type { Env } from './env.js';
 import { AppSecretMissingError, NotFoundError, ProviderKeyMissingError } from './errors.js';
+import type { TransportFactory } from './mcp/manager.js';
+import { McpManager } from './mcp/manager.js';
+import { registerIntegrationRoutes } from './routes/integrations.js';
+import { registerMcpRoutes } from './routes/mcp.js';
 import { registerProviderRoutes } from './routes/providers.js';
 import { registerSettingRoutes } from './routes/settings.js';
+import { registerSkillRoutes } from './routes/skills.js';
 import type { ModelFactory } from './routes/stream.js';
 import { registerStreamRoutes } from './routes/stream.js';
 import { registerThreadRoutes } from './routes/threads.js';
+import { McpServerService } from './services/mcp-servers.js';
 import { SettingsService } from './services/settings.js';
 
-export const SERVER_VERSION = '0.3.0';
+export const SERVER_VERSION = '0.4.0';
 
 export interface AppDeps {
   db: Db;
@@ -22,6 +28,10 @@ export interface AppDeps {
   envSource?: NodeJS.ProcessEnv;
   /** Overridable in tests to inject mock language models. */
   modelFactory?: ModelFactory;
+  /** Overridable in tests to connect MCP clients in-memory. */
+  mcpTransportFactory?: TransportFactory;
+  /** Overridable in tests for skill installs (GitHub fetches). */
+  skillFetchImpl?: typeof fetch;
 }
 
 /**
@@ -87,17 +97,35 @@ export async function buildApp(env: Env, deps: AppDeps) {
     deps.modelFactory ??
     (({ providerId, modelId, apiKey }) => createLanguageModel({ providerId, modelId, apiKey }));
 
+  const mcpService = new McpServerService(deps.db, env.APP_SECRET);
+  const mcpManager = deps.mcpTransportFactory
+    ? new McpManager(deps.mcpTransportFactory)
+    : new McpManager();
+
+  app.addHook('onClose', async () => {
+    await mcpManager.closeAll();
+  });
+
   await app.register(
     async (api) => {
       registerThreadRoutes(api, deps.db);
       registerSettingRoutes(api, settingsService);
       registerProviderRoutes(api, settingsService, envSource);
+      registerIntegrationRoutes(api, settingsService, envSource);
+      registerMcpRoutes(api, mcpService, mcpManager);
+      registerSkillRoutes(api, {
+        db: deps.db,
+        ...(deps.skillFetchImpl ? { fetchImpl: deps.skillFetchImpl } : {}),
+        ...(envSource.GITHUB_TOKEN ? { githubToken: envSource.GITHUB_TOKEN } : {}),
+      });
       registerStreamRoutes(api, {
         db: deps.db,
         env,
         settings: settingsService,
         envSource,
         modelFactory,
+        mcpService,
+        mcpManager,
       });
     },
     { prefix: '/api' },
