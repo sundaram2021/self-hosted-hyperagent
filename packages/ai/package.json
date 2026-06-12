@@ -1,0 +1,40 @@
+{
+  "name": "@hyperagent/ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Curated multi-provider model registry, catalog, and pricing for self-hosted-hyperagent.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/deepseek": "^2.0.0",
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/groq": "^3.0.0",
+    "@ai-sdk/mistral": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai-compatible": "^2.0.0",
+    "@ai-sdk/xai": "^3.0.0",
+    "@hyperagent/shared": "workspace:*",
+    "ai": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.0"
+  }
+}
