@@ -4,7 +4,15 @@ import {
   integrationStatusSchema,
   mcpServerSchema,
   mcpTestResultSchema,
+  memoryGraphSchema,
+  memorySchema,
   messageSchema,
+  obsInsightsSchema,
+  obsModelStatSchema,
+  obsOverviewSchema,
+  obsRunSummarySchema,
+  obsTimeseriesPointSchema,
+  obsTraceSchema,
   providerModelsSchema,
   providerStatusSchema,
   skillDetailSchema,
@@ -16,7 +24,15 @@ import {
   type IntegrationStatus,
   type McpServer,
   type McpTestResult,
+  type Memory,
+  type MemoryGraph,
   type Message,
+  type ObsInsights,
+  type ObsModelStat,
+  type ObsOverview,
+  type ObsRunSummary,
+  type ObsTimeseriesPoint,
+  type ObsTrace,
   type ProviderModels,
   type ProviderStatus,
   type Skill,
@@ -287,6 +303,75 @@ export function saveIntegrationKey(id: string, apiKey: string): Promise<void> {
 
 export function deleteIntegrationKey(id: string): Promise<void> {
   return request(`/api/integrations/${id}/key`, null, { method: 'DELETE' });
+}
+
+// --- Memories ---
+
+export function listMemories(query?: string): Promise<Memory[]> {
+  const qs = query ? `?q=${encodeURIComponent(query)}` : '';
+  return request(`/api/memories${qs}`, memorySchema.array());
+}
+
+export function createMemory(content: string): Promise<Memory> {
+  return request('/api/memories', memorySchema, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+}
+
+export function updateMemory(
+  id: string,
+  body: { content?: string; importance?: number },
+): Promise<Memory> {
+  return request(`/api/memories/${id}`, memorySchema, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteMemory(id: string): Promise<void> {
+  return request(`/api/memories/${id}`, null, { method: 'DELETE' });
+}
+
+export function getMemoryGraph(): Promise<MemoryGraph> {
+  return request('/api/memories/graph', memoryGraphSchema);
+}
+
+// --- Observability ---
+
+export function getObsOverview(days = 7): Promise<ObsOverview> {
+  return request(`/api/observability/overview?days=${days}`, obsOverviewSchema);
+}
+
+export function getObsTimeseries(days = 7): Promise<ObsTimeseriesPoint[]> {
+  return request(`/api/observability/timeseries?days=${days}`, obsTimeseriesPointSchema.array());
+}
+
+export function getObsByModel(days = 7): Promise<ObsModelStat[]> {
+  return request(`/api/observability/by-model?days=${days}`, obsModelStatSchema.array());
+}
+
+export function getObsRuns(days = 7): Promise<ObsRunSummary[]> {
+  return request(`/api/observability/runs?days=${days}`, obsRunSummarySchema.array());
+}
+
+export function getObsTrace(runId: string): Promise<ObsTrace> {
+  return request(`/api/observability/runs/${runId}/trace`, obsTraceSchema);
+}
+
+export async function getObsInsights(): Promise<ObsInsights | null> {
+  try {
+    return await request('/api/observability/insights', obsInsightsSchema);
+  } catch {
+    return null;
+  }
+}
+
+export function generateObsInsights(provider: string, model: string): Promise<ObsInsights> {
+  return request('/api/observability/insights', obsInsightsSchema, {
+    method: 'POST',
+    body: JSON.stringify({ provider, model }),
+  });
 }
 
 /** Cross-component refresh signal for the sidebar thread list. */
