@@ -84,6 +84,24 @@ export function Sidebar() {
           Chat
         </Link>
         <Link
+          href="/mcp"
+          className={`rounded-md px-2 py-1.5 ${
+            pathname === '/mcp' ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          MCP servers
+        </Link>
+        <Link
+          href="/skills"
+          className={`rounded-md px-2 py-1.5 ${
+            pathname === '/skills'
+              ? 'bg-zinc-900 text-zinc-100'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          Skills
+        </Link>
+        <Link
           href="/settings"
           className={`rounded-md px-2 py-1.5 ${
             pathname === '/settings'
