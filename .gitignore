@@ -1,6 +1,27 @@
+# Node
 node_modules/
 dist/
+.next/
+out/
 .turbo/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Environment
 .env
-*.log
+.env.local
+.env.*.local
+
+# OS / editor
 .DS_Store
+.idea/
+.vscode/
