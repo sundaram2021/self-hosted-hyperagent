@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { createLanguageModel } from '@hyperagent/ai';
 import type { Db } from '@hyperagent/db';
 import { API_ERROR_CODES, API_PATHS, healthResponseSchema, SERVICES } from '@hyperagent/shared';
@@ -9,8 +10,13 @@ import type { Env } from './env.js';
 import { AppSecretMissingError, NotFoundError, ProviderKeyMissingError } from './errors.js';
 import type { TransportFactory } from './mcp/manager.js';
 import { McpManager } from './mcp/manager.js';
+import type { Embedder } from './memory/embedder.js';
+import { createEmbedder } from './memory/embedder.js';
+import { MemoryService } from './memory/service.js';
 import { registerIntegrationRoutes } from './routes/integrations.js';
 import { registerMcpRoutes } from './routes/mcp.js';
+import { registerMemoryRoutes } from './routes/memories.js';
+import { registerObservabilityRoutes } from './routes/observability.js';
 import { registerProviderRoutes } from './routes/providers.js';
 import { registerSettingRoutes } from './routes/settings.js';
 import { registerSkillRoutes } from './routes/skills.js';
@@ -20,7 +26,7 @@ import { registerThreadRoutes } from './routes/threads.js';
 import { McpServerService } from './services/mcp-servers.js';
 import { SettingsService } from './services/settings.js';
 
-export const SERVER_VERSION = '0.4.0';
+export const SERVER_VERSION = '0.5.0';
 
 export interface AppDeps {
   db: Db;
@@ -32,6 +38,8 @@ export interface AppDeps {
   mcpTransportFactory?: TransportFactory;
   /** Overridable in tests for skill installs (GitHub fetches). */
   skillFetchImpl?: typeof fetch;
+  /** Overridable in tests for deterministic embeddings (null = no embedder). */
+  embedder?: Embedder | null;
 }
 
 /**
@@ -47,6 +55,11 @@ export async function buildApp(env: Env, deps: AppDeps) {
 
   await app.register(cors, {
     origin: [env.WEB_ORIGIN],
+  });
+
+  await app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: '1 minute',
   });
 
   app.setErrorHandler((error, request, reply) => {
@@ -102,6 +115,10 @@ export async function buildApp(env: Env, deps: AppDeps) {
     ? new McpManager(deps.mcpTransportFactory)
     : new McpManager();
 
+  const embedder =
+    deps.embedder !== undefined ? deps.embedder : await createEmbedder(envSource, settingsService);
+  const memoryService = env.MEMORY_ENABLED ? new MemoryService(deps.db, embedder) : null;
+
   app.addHook('onClose', async () => {
     await mcpManager.closeAll();
   });
@@ -118,6 +135,15 @@ export async function buildApp(env: Env, deps: AppDeps) {
         ...(deps.skillFetchImpl ? { fetchImpl: deps.skillFetchImpl } : {}),
         ...(envSource.GITHUB_TOKEN ? { githubToken: envSource.GITHUB_TOKEN } : {}),
       });
+      if (memoryService) {
+        registerMemoryRoutes(api, deps.db, memoryService);
+      }
+      registerObservabilityRoutes(api, {
+        db: deps.db,
+        settings: settingsService,
+        envSource,
+        modelFactory,
+      });
       registerStreamRoutes(api, {
         db: deps.db,
         env,
@@ -126,6 +152,7 @@ export async function buildApp(env: Env, deps: AppDeps) {
         modelFactory,
         mcpService,
         mcpManager,
+        memoryService,
       });
     },
     { prefix: '/api' },
