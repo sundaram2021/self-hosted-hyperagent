@@ -1,25 +1,27 @@
 {
   "name": "self-hosted-hyperagent",
-  "version": "0.0.1",
-  "description": "A Self Hosted HyperAgent",
-  "main": "src/index.ts",
-  "scripts": {
-    "start": "node src/index.ts",
-    "dev": "node --watch src/index.ts",
-    "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "lint": "eslint . --ext .ts"
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted, multi-provider AI agent platform — MCP servers, Skills, Exa search, memory, and observability.",
+  "packageManager": "pnpm@10.34.1",
+  "engines": {
+    "node": ">=22"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.15.1",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "eslint": "^10.4.1",
-    "eslint-config-prettier": "^10.1.8",
-    "globals": "^17.6.0",
-    "jiti": "^2.7.0",
-    "prettier": "^3.8.4",
-    "typescript-eslint": "^8.61.0"
+    "@eslint/js": "^9.25.0",
+    "eslint": "^9.25.0",
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0"
   }
 }

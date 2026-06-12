@@ -1,0 +1,26 @@
+{
+  "name": "@hyperagent/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent runtime server — owns the agent loop, SSE streaming, and MCP connections.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@hyperagent/shared": "workspace:*",
+    "fastify": "^5.3.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.0"
+  }
+}
