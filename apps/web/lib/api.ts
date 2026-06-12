@@ -1,18 +1,30 @@
 import type { z } from 'zod';
 import {
   apiErrorSchema,
+  integrationStatusSchema,
+  mcpServerSchema,
+  mcpTestResultSchema,
   messageSchema,
   providerModelsSchema,
   providerStatusSchema,
+  skillDetailSchema,
+  skillSchema,
   streamEventSchema,
   threadSchema,
   type AgentStreamEvent,
+  type CreateMcpServerBody,
+  type IntegrationStatus,
+  type McpServer,
+  type McpTestResult,
   type Message,
   type ProviderModels,
   type ProviderStatus,
+  type Skill,
+  type SkillDetail,
   type StreamRequest,
   type TextPart,
   type Thread,
+  type UpdateMcpServerBody,
 } from '@hyperagent/shared';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:8787';
@@ -202,6 +214,79 @@ export function saveProviderKey(id: string, apiKey: string): Promise<void> {
 
 export function deleteProviderKey(id: string): Promise<void> {
   return request(`/api/providers/${id}/key`, null, { method: 'DELETE' });
+}
+
+// --- MCP servers ---
+
+export function listMcpServers(): Promise<McpServer[]> {
+  return request('/api/mcp-servers', mcpServerSchema.array());
+}
+
+export function createMcpServer(body: CreateMcpServerBody): Promise<McpServer> {
+  return request('/api/mcp-servers', mcpServerSchema, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateMcpServer(id: string, body: UpdateMcpServerBody): Promise<McpServer> {
+  return request(`/api/mcp-servers/${id}`, mcpServerSchema, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteMcpServer(id: string): Promise<void> {
+  return request(`/api/mcp-servers/${id}`, null, { method: 'DELETE' });
+}
+
+export function testMcpServer(id: string): Promise<McpTestResult> {
+  return request(`/api/mcp-servers/${id}/test`, mcpTestResultSchema, { method: 'POST' });
+}
+
+// --- Skills ---
+
+export function listSkills(): Promise<Skill[]> {
+  return request('/api/skills', skillSchema.array());
+}
+
+export function getSkill(id: string): Promise<SkillDetail> {
+  return request(`/api/skills/${id}`, skillDetailSchema);
+}
+
+export function installSkill(url: string): Promise<Skill> {
+  return request('/api/skills', skillSchema, {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+}
+
+export function updateSkill(id: string, enabled: boolean): Promise<Skill> {
+  return request(`/api/skills/${id}`, skillSchema, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function deleteSkill(id: string): Promise<void> {
+  return request(`/api/skills/${id}`, null, { method: 'DELETE' });
+}
+
+// --- Integrations (Exa) ---
+
+export function listIntegrations(): Promise<IntegrationStatus[]> {
+  return request('/api/integrations', integrationStatusSchema.array());
+}
+
+export function saveIntegrationKey(id: string, apiKey: string): Promise<void> {
+  return request(`/api/integrations/${id}/key`, null, {
+    method: 'PUT',
+    body: JSON.stringify({ apiKey }),
+  });
+}
+
+export function deleteIntegrationKey(id: string): Promise<void> {
+  return request(`/api/integrations/${id}/key`, null, { method: 'DELETE' });
 }
 
 /** Cross-component refresh signal for the sidebar thread list. */
