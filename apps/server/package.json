@@ -12,7 +12,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
     "@fastify/cors": "^11.0.0",
+    "@fastify/rate-limit": "^10.0.0",
     "@hyperagent/ai": "workspace:*",
     "@hyperagent/db": "workspace:*",
     "@hyperagent/shared": "workspace:*",
