@@ -1,3 +1,10 @@
-node_modules/
-dist/
-package-lock.json
+node_modules
+dist
+.next
+.turbo
+coverage
+pnpm-lock.yaml
+uv.lock
+apps/sandbox
+.venv
+__pycache__
