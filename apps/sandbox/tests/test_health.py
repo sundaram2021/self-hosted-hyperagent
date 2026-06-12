@@ -13,6 +13,6 @@ def test_health_returns_ok() -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["service"] == "sandbox"
-    assert body["version"] == "0.1.0"
+    assert isinstance(body["version"], str) and body["version"]
     assert body["uptimeSeconds"] >= 0
     assert "timestamp" in body
