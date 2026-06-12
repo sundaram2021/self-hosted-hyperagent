@@ -130,6 +130,41 @@ export const MIGRATIONS: readonly Migration[] = [
       )`,
     ],
   },
+  {
+    id: '0004_memory_engine',
+    statements: [
+      `CREATE EXTENSION IF NOT EXISTS vector`,
+      `CREATE TABLE memories (
+        id text PRIMARY KEY,
+        content text NOT NULL,
+        category text NOT NULL DEFAULT 'fact'
+          CHECK (category IN ('fact', 'preference', 'episode', 'profile')),
+        importance real NOT NULL DEFAULT 0.5,
+        embedding vector(1536),
+        tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
+        source_thread_id text,
+        source_run_id text,
+        superseded_by text,
+        access_count integer NOT NULL DEFAULT 0,
+        last_accessed_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX memories_embedding_idx ON memories
+        USING hnsw (embedding vector_cosine_ops)`,
+      `CREATE INDEX memories_tsv_idx ON memories USING gin (tsv)`,
+      `CREATE INDEX memories_created_idx ON memories (created_at)`,
+      `CREATE TABLE memory_relations (
+        id text PRIMARY KEY,
+        from_id text NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+        to_id text NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+        relation text NOT NULL CHECK (relation IN ('updates', 'extends', 'derives')),
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX memory_relations_from_idx ON memory_relations (from_id)`,
+      `CREATE INDEX memory_relations_to_idx ON memory_relations (to_id)`,
+    ],
+  },
 ];
 
 interface RowsResult {
