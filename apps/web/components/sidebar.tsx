@@ -102,6 +102,26 @@ export function Sidebar() {
           Skills
         </Link>
         <Link
+          href="/memories"
+          className={`rounded-md px-2 py-1.5 ${
+            pathname === '/memories'
+              ? 'bg-zinc-900 text-zinc-100'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          Memories
+        </Link>
+        <Link
+          href="/observability"
+          className={`rounded-md px-2 py-1.5 ${
+            pathname === '/observability'
+              ? 'bg-zinc-900 text-zinc-100'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          Observability
+        </Link>
+        <Link
           href="/settings"
           className={`rounded-md px-2 py-1.5 ${
             pathname === '/settings'
@@ -111,12 +131,6 @@ export function Sidebar() {
         >
           Settings
         </Link>
-        <span className="flex items-center justify-between rounded-md px-2 py-1.5 text-zinc-600">
-          Observability
-          <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-            Phase 9
-          </span>
-        </span>
       </nav>
 
       <div className="mt-5 flex items-center justify-between px-5 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
