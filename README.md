@@ -10,9 +10,9 @@ A self-hosted, multi-provider AI agent platform. Bring your own API keys and run
 | 2     | Data layer (Drizzle + Postgres), threads & settings, app shell                                                                    | ✅     |
 | 3     | Multi-provider agent loop (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Kimi, Z.ai, Qwen, Groq, OpenRouter), streaming chat | ✅     |
 | 4     | Python sandbox — isolated code execution                                                                                          | ✅     |
-| 5     | MCP servers — connect any public MCP (stdio / HTTP / SSE)                                                                         | ⬜     |
-| 6     | Skills — install any public Agent Skill                                                                                           | ⬜     |
-| 7     | Exa web search with citations                                                                                                     | ⬜     |
+| 5     | MCP servers — connect any public MCP (stdio / HTTP / SSE)                                                                         | ✅     |
+| 6     | Skills — install any public Agent Skill                                                                                           | ✅     |
+| 7     | Exa web search with citations                                                                                                     | ✅     |
 | 8     | Memory engine — knowledge graph, hybrid recall, consolidation                                                                     | ⬜     |
 | 9     | Observability — traces, token/cost analytics, conversation insights                                                               | ⬜     |
 | 10    | Production hardening — Docker images, one-command deploy                                                                          | ⬜     |
@@ -35,6 +35,12 @@ infra:        Postgres 16 + pgvector via docker-compose
 - **11 providers, one loop**: pick any provider/model per thread (or type a custom model id). The agent runs a multi-step tool-calling loop (Vercel AI SDK) with SSE streaming, persisted runs, and telemetry spans (`llm_calls`, `tool_calls`) for the observability tab (Phase 9).
 - **execute_code tool**: the agent can run Python 3.12 or Bash in the sandbox service — per-execution temp dirs, minimal env (no secrets inherited), CPU/memory/file rlimits, 64KB output caps, and hard wall-clock timeouts that kill the whole process group.
 - Stop generation any time; partial output is persisted so a refresh shows a consistent conversation.
+
+## MCP, Skills & web search
+
+- **MCP servers** (/mcp): connect any public MCP server — stdio (`npx`/`uvx` commands) or remote HTTP/SSE. Tools are discovered automatically and namespaced `server__tool`. Env vars and headers are stored encrypted. Connection failures degrade gracefully (the server is skipped for that run). Security note: stdio MCP servers run third-party code with the agent server's permissions — only add servers you trust.
+- **Skills** (/skills): install any public Agent Skill (SKILL.md) from GitHub — e.g. anthropics/skills or anything listed on skills.sh. Progressive disclosure keeps prompts small: the system prompt carries names + descriptions; the agent calls `read_skill` / `read_skill_file` on demand and runs bundled scripts in the sandbox. Set `GITHUB_TOKEN` to raise install rate limits.
+- **Exa search** (Settings → Integrations): with an Exa key, the agent gets `web_search`, `get_page_contents`, and `find_similar`, with sources rendered as citation cards in chat.
 
 ## Data & settings
 
