@@ -15,6 +15,8 @@ function serializeThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     title: row.title,
+    lastProvider: row.lastProvider,
+    lastModel: row.lastModel,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
