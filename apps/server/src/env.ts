@@ -26,6 +26,20 @@ const envSchema = z.object({
   SANDBOX_EXECUTE_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
   /** Maximum model steps (tool-call rounds) per agent turn. */
   AGENT_MAX_STEPS: z.coerce.number().int().positive().max(32).default(8),
+  /** Long-term memory: hybrid recall + memory tools. */
+  MEMORY_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  /** Post-turn LLM memory extraction (spends tokens — opt-in). */
+  MEMORY_AUTO_EXTRACT: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  /** Memories injected into context per turn. */
+  MEMORY_RECALL_K: z.coerce.number().int().min(0).max(20).default(5),
+  /** API rate limit (requests/minute per client). */
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(600),
 });
 
 export type Env = z.infer<typeof envSchema>;

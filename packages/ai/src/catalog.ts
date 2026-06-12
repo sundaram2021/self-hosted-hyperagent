@@ -122,3 +122,21 @@ export function findModelPricing(
 export function defaultModelFor(providerId: ProviderId): string {
   return MODEL_CATALOG[providerId]?.[0]?.id ?? '';
 }
+
+/**
+ * Estimated USD cost for a call. Null when the model has no catalog pricing
+ * or token counts are unknown — callers must handle partial pricing.
+ */
+export function estimateCostUsd(
+  provider: string,
+  model: string,
+  inputTokens: number | null,
+  outputTokens: number | null,
+): number | null {
+  const pricing = findModelPricing(provider as ProviderId, model);
+  if (!pricing || inputTokens === null || outputTokens === null) return null;
+  return (
+    (inputTokens / 1_000_000) * pricing.inputPerMTok +
+    (outputTokens / 1_000_000) * pricing.outputPerMTok
+  );
+}

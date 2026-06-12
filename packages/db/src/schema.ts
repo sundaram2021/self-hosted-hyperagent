@@ -1,6 +1,16 @@
 import { randomUUID } from 'node:crypto';
 
-import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  vector,
+} from 'drizzle-orm/pg-core';
 
 export const threads = pgTable('threads', {
   id: text('id')
@@ -160,6 +170,57 @@ export const skills = pgTable('skills', {
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 });
 
+/**
+ * Long-term memory store (supermemory-style). The `tsv` full-text column is a
+ * generated column managed in SQL (migration 0004) and queried via raw
+ * fragments; the embedding uses pgvector with cosine HNSW indexing.
+ */
+export const memories = pgTable(
+  'memories',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    content: text('content').notNull(),
+    category: text('category', { enum: ['fact', 'preference', 'episode', 'profile'] })
+      .notNull()
+      .default('fact'),
+    importance: real('importance').notNull().default(0.5),
+    embedding: vector('embedding', { dimensions: 1536 }),
+    sourceThreadId: text('source_thread_id'),
+    sourceRunId: text('source_run_id'),
+    /** Set when a newer memory replaces this one (relation: updates). */
+    supersededBy: text('superseded_by'),
+    accessCount: integer('access_count').notNull().default(0),
+    lastAccessedAt: timestamp('last_accessed_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [index('memories_created_idx').on(table.createdAt)],
+);
+
+/** Knowledge-graph edges between memories: updates / extends / derives. */
+export const memoryRelations = pgTable(
+  'memory_relations',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    fromId: text('from_id')
+      .notNull()
+      .references(() => memories.id, { onDelete: 'cascade' }),
+    toId: text('to_id')
+      .notNull()
+      .references(() => memories.id, { onDelete: 'cascade' }),
+    relation: text('relation', { enum: ['updates', 'extends', 'derives'] }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('memory_relations_from_idx').on(table.fromId),
+    index('memory_relations_to_idx').on(table.toId),
+  ],
+);
+
 export type ThreadRow = typeof threads.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;
@@ -168,3 +229,5 @@ export type LlmCallRow = typeof llmCalls.$inferSelect;
 export type ToolCallRow = typeof toolCalls.$inferSelect;
 export type McpServerRow = typeof mcpServers.$inferSelect;
 export type SkillRow = typeof skills.$inferSelect;
+export type MemoryRow = typeof memories.$inferSelect;
+export type MemoryRelationRow = typeof memoryRelations.$inferSelect;

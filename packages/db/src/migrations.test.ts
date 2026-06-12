@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
+import { vector } from '@electric-sql/pglite/vector';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { describe, expect, it } from 'vitest';
@@ -8,7 +9,7 @@ import { runMigrations } from './migrations.js';
 import * as schema from './schema.js';
 
 async function makeDb(): Promise<Db> {
-  const client = new PGlite();
+  const client = new PGlite({ extensions: { vector } });
   const db = drizzle(client, { schema });
   // Structurally identical query API; see Db docs in index.ts.
   return db as unknown as Db;
@@ -93,6 +94,27 @@ describe('runMigrations', () => {
       })
       .returning();
     expect(skill?.files).toHaveLength(1);
+
+    const embedding = Array.from({ length: 1536 }, (_, i) => (i === 0 ? 1 : 0));
+    const [memory] = await db
+      .insert(schema.memories)
+      .values({ content: 'User prefers dark mode', category: 'preference', embedding })
+      .returning();
+    expect(memory?.embedding).toHaveLength(1536);
+
+    const [second] = await db
+      .insert(schema.memories)
+      .values({ content: 'User strongly prefers dark mode everywhere' })
+      .returning();
+    const [relation] = await db
+      .insert(schema.memoryRelations)
+      .values({ fromId: second!.id, toId: memory!.id, relation: 'updates' })
+      .returning();
+    expect(relation?.relation).toBe('updates');
+
+    // Memory cascade: deleting a memory removes its relations.
+    await db.delete(schema.memories).where(eq(schema.memories.id, memory!.id));
+    expect(await db.select().from(schema.memoryRelations)).toEqual([]);
 
     // Cascade: deleting the thread removes messages, runs, and run telemetry.
     await db.delete(schema.threads).where(eq(schema.threads.id, thread!.id));

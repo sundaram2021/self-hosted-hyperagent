@@ -5,6 +5,8 @@
 export interface SystemPromptOptions {
   toolsAvailable: string[];
   skills?: Array<{ name: string; description: string }>;
+  /** Hybrid-recall results injected each turn (Phase 8). */
+  memories?: Array<{ content: string; category: string }>;
 }
 
 export function buildSystemPrompt(options: SystemPromptOptions): string {
@@ -20,6 +22,16 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
       'Use tools when they materially improve the answer (calculations, running code,',
       'searching the web, inspecting data). Do not call tools for questions you can',
       'answer directly. When you use web search results, cite source URLs.',
+    );
+  }
+
+  const memories = options.memories ?? [];
+  if (memories.length > 0) {
+    lines.push(
+      '',
+      'Relevant long-term memories about the user (from previous conversations):',
+      ...memories.map((memory) => `- [${memory.category}] ${memory.content}`),
+      'Use them naturally when relevant; save new durable facts with memory_save.',
     );
   }
 

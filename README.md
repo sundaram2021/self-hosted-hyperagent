@@ -13,9 +13,9 @@ A self-hosted, multi-provider AI agent platform. Bring your own API keys and run
 | 5     | MCP servers — connect any public MCP (stdio / HTTP / SSE)                                                                         | ✅     |
 | 6     | Skills — install any public Agent Skill                                                                                           | ✅     |
 | 7     | Exa web search with citations                                                                                                     | ✅     |
-| 8     | Memory engine — knowledge graph, hybrid recall, consolidation                                                                     | ⬜     |
-| 9     | Observability — traces, token/cost analytics, conversation insights                                                               | ⬜     |
-| 10    | Production hardening — Docker images, one-command deploy                                                                          | ⬜     |
+| 8     | Memory engine — knowledge graph, hybrid recall, consolidation                                                                     | ✅     |
+| 9     | Observability — traces, token/cost analytics, conversation insights                                                               | ✅     |
+| 10    | Production hardening — Docker images, one-command deploy                                                                          | ✅     |
 
 ## Architecture
 
@@ -41,6 +41,19 @@ infra:        Postgres 16 + pgvector via docker-compose
 - **MCP servers** (/mcp): connect any public MCP server — stdio (`npx`/`uvx` commands) or remote HTTP/SSE. Tools are discovered automatically and namespaced `server__tool`. Env vars and headers are stored encrypted. Connection failures degrade gracefully (the server is skipped for that run). Security note: stdio MCP servers run third-party code with the agent server's permissions — only add servers you trust.
 - **Skills** (/skills): install any public Agent Skill (SKILL.md) from GitHub — e.g. anthropics/skills or anything listed on skills.sh. Progressive disclosure keeps prompts small: the system prompt carries names + descriptions; the agent calls `read_skill` / `read_skill_file` on demand and runs bundled scripts in the sandbox. Set `GITHUB_TOKEN` to raise install rate limits.
 - **Exa search** (Settings → Integrations): with an Exa key, the agent gets `web_search`, `get_page_contents`, and `find_similar`, with sources rendered as citation cards in chat.
+
+## Memory & observability
+
+- **Memory engine** (/memories): supermemory-style — every saved memory goes through consolidation (near-duplicates merge, strong overlaps supersede via an \`updates\` relation, related memories link via \`extends\`/\`derives\`), forming a knowledge graph. Recall is hybrid (pgvector cosine + Postgres full-text, RRF-fused with importance/recency boosts) and injected into every turn. Embeddings use your OpenAI or Google key; without one, recall degrades to keyword-only. Post-turn auto-extraction is opt-in (\`MEMORY_AUTO_EXTRACT=true\`).
+- **Observability** (/observability): every run is traced — per-step \`llm_calls\` and \`tool_calls\` spans roll up into dashboards (tokens, est. cost from the model catalog, success rate, p50/p95 latency, errors), per-day charts, a by-model table, and a click-to-expand **trace waterfall** per run. The opt-in **insights** panel runs LLM analysis over recent conversations (frustration signals, topics, failure patterns, suggestions).
+
+## Deploying
+
+One command, whole stack: see [SELF_HOSTING.md](./SELF_HOSTING.md).
+
+\`\`\`bash
+docker compose -f docker-compose.prod.yml up -d --build
+\`\`\`
 
 ## Data & settings
 

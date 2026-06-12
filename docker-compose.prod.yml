@@ -1,0 +1,85 @@
+# Production deployment: the full stack with one command.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Ports bind to 127.0.0.1 (no auth in v1) — see SELF_HOSTING.md to expose
+# safely behind a reverse proxy. Provider keys: put them in .env next to this
+# file or add them in Settings after first boot (encrypted with APP_SECRET).
+name: self-hosted-hyperagent
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hyperagent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hyperagent}
+      POSTGRES_DB: hyperagent
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hyperagent -d hyperagent']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sandbox:
+    build:
+      context: .
+      dockerfile: apps/sandbox/Dockerfile
+    restart: unless-stopped
+    environment:
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+    ports:
+      - '127.0.0.1:8788:8788'
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sandbox:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://hyperagent:${POSTGRES_PASSWORD:-hyperagent}@postgres:5432/hyperagent
+      SERVER_HOST: 0.0.0.0
+      SANDBOX_URL: http://sandbox:8788
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      APP_SECRET: ${APP_SECRET:-}
+      MEMORY_AUTO_EXTRACT: ${MEMORY_AUTO_EXTRACT:-false}
+      # Provider keys (optional — can also be saved in Settings):
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      ZAI_API_KEY: ${ZAI_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      EXA_API_KEY: ${EXA_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    ports:
+      - '127.0.0.1:8787:8787'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:8787}
+        NEXT_PUBLIC_SANDBOX_URL: ${NEXT_PUBLIC_SANDBOX_URL:-http://localhost:8788}
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_started
+    ports:
+      - '127.0.0.1:3000:3000'
+
+volumes:
+  postgres-data:
