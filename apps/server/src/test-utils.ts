@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
+import { vector } from '@electric-sql/pglite/vector';
 import type { Db } from '@hyperagent/db';
 import { runMigrations, schema } from '@hyperagent/db';
 import { drizzle } from 'drizzle-orm/pglite';
@@ -12,7 +13,7 @@ import { loadEnv } from './env.js';
  * @hyperagent/db.
  */
 export async function makeTestDb(): Promise<Db> {
-  const client = new PGlite();
+  const client = new PGlite({ extensions: { vector } });
   const db = drizzle(client, { schema }) as unknown as Db;
   await runMigrations(db);
   return db;
