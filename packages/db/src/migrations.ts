@@ -101,6 +101,35 @@ export const MIGRATIONS: readonly Migration[] = [
       `CREATE INDEX tool_calls_created_idx ON tool_calls (created_at)`,
     ],
   },
+  {
+    id: '0003_mcp_and_skills',
+    statements: [
+      `CREATE TABLE mcp_servers (
+        id text PRIMARY KEY,
+        name text NOT NULL UNIQUE,
+        transport text NOT NULL CHECK (transport IN ('stdio', 'http', 'sse')),
+        command text,
+        args jsonb,
+        env text,
+        url text,
+        headers text,
+        enabled boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+      `CREATE TABLE skills (
+        id text PRIMARY KEY,
+        name text NOT NULL UNIQUE,
+        description text NOT NULL DEFAULT '',
+        source text NOT NULL,
+        content text NOT NULL,
+        files jsonb NOT NULL DEFAULT '[]'::jsonb,
+        enabled boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+    ],
+  },
 ];
 
 interface RowsResult {
