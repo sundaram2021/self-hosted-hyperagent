@@ -77,6 +77,23 @@ describe('runMigrations', () => {
 
     await db.insert(schema.settings).values({ key: 'theme', value: 'dark', encrypted: false });
 
+    const [mcpServer] = await db
+      .insert(schema.mcpServers)
+      .values({ name: 'calc', transport: 'stdio', command: 'npx', args: ['-y', 'calc-mcp'] })
+      .returning();
+    expect(mcpServer?.enabled).toBe(true);
+
+    const [skill] = await db
+      .insert(schema.skills)
+      .values({
+        name: 'pdf-tools',
+        source: 'https://github.com/acme/skills/tree/main/pdf-tools',
+        content: '# PDF',
+        files: [{ path: 'scripts/extract.py', content: 'print(1)' }],
+      })
+      .returning();
+    expect(skill?.files).toHaveLength(1);
+
     // Cascade: deleting the thread removes messages, runs, and run telemetry.
     await db.delete(schema.threads).where(eq(schema.threads.id, thread!.id));
     const remainingMessages = await db.select().from(schema.messages);
