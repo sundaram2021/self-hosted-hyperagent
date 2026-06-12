@@ -13,6 +13,8 @@ import { buildSystemPrompt } from '../agent/system-prompt.js';
 import type { Env } from '../env.js';
 import { NotFoundError } from '../errors.js';
 import type { McpManager } from '../mcp/manager.js';
+import { extractAndStoreMemories } from '../memory/extraction.js';
+import type { MemoryService } from '../memory/service.js';
 import type { McpServerService } from '../services/mcp-servers.js';
 import { resolveKeySource, resolveProviderKey } from '../services/provider-keys.js';
 import type { SettingsService } from '../services/settings.js';
@@ -32,6 +34,7 @@ export interface StreamRouteDeps {
   modelFactory: ModelFactory;
   mcpService: McpServerService;
   mcpManager: McpManager;
+  memoryService: MemoryService | null;
 }
 
 const idParamSchema = { type: 'object', properties: { id: { type: 'string' } } } as const;
@@ -51,7 +54,8 @@ function serializeRun(row: RunRow): Run {
 }
 
 export function registerStreamRoutes(app: FastifyInstance, deps: StreamRouteDeps): void {
-  const { db, env, settings, envSource, modelFactory, mcpService, mcpManager } = deps;
+  const { db, env, settings, envSource, modelFactory, mcpService, mcpManager, memoryService } =
+    deps;
 
   /** Model catalog grouped by provider, with key availability. */
   app.get('/models', async (): Promise<ProviderModels[]> => {
@@ -139,22 +143,55 @@ export function registerStreamRoutes(app: FastifyInstance, deps: StreamRouteDeps
         settings,
         mcpService,
         mcpManager,
+        memoryService,
+        threadId,
         logger: request.log,
       });
 
+      // Hybrid memory recall (Phase 8) — failures never block the turn.
+      let recalledMemories: Array<{ content: string; category: string }> = [];
+      if (memoryService && env.MEMORY_RECALL_K > 0) {
+        try {
+          recalledMemories = await memoryService.recallForTurn(body.text, env.MEMORY_RECALL_K);
+        } catch (error) {
+          request.log.warn({ err: error }, 'memory recall failed');
+        }
+      }
+
       try {
-        await runAgentTurn({
+        const result = await runAgentTurn({
           db,
           threadId,
           provider: body.provider,
           model: body.model,
           languageModel,
           tools,
-          system: buildSystemPrompt({ toolsAvailable: Object.keys(tools), skills }),
+          system: buildSystemPrompt({
+            toolsAvailable: Object.keys(tools),
+            skills,
+            memories: recalledMemories,
+          }),
           maxSteps: env.AGENT_MAX_STEPS,
           signal: abortController.signal,
           onEvent: send,
         });
+
+        // Opt-in post-turn extraction; fire-and-forget.
+        if (memoryService && env.MEMORY_AUTO_EXTRACT && result.status === 'completed') {
+          void (async () => {
+            try {
+              const conversationText = `user: ${body.text}`;
+              await extractAndStoreMemories(memoryService, {
+                model: languageModel,
+                conversationText,
+                threadId,
+                runId: result.runId,
+              });
+            } catch (error) {
+              request.log.warn({ err: error }, 'memory extraction failed');
+            }
+          })();
+        }
       } catch (error) {
         request.log.error(error, 'agent turn crashed');
         send({
