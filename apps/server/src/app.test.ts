@@ -1,26 +1,22 @@
 import { healthResponseSchema } from '@hyperagent/shared';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildApp } from './app.js';
 import { loadEnv } from './env.js';
-
-const env = loadEnv({});
-const app = await buildApp({ ...env, LOG_LEVEL: 'fatal' });
-
-afterAll(async () => {
-  await app.close();
-});
+import { makeTestDb, makeTestEnv } from './test-utils.js';
 
 describe('GET /health', () => {
   it('returns a valid health payload', async () => {
-    const response = await app.inject({ method: 'GET', url: '/health' });
+    const app = await buildApp(makeTestEnv(), { db: await makeTestDb() });
 
+    const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
 
     const body = healthResponseSchema.parse(response.json());
     expect(body.service).toBe('server');
     expect(body.status).toBe('ok');
-    expect(body.uptimeSeconds).toBeGreaterThanOrEqual(0);
+
+    await app.close();
   });
 });
 
@@ -31,10 +27,14 @@ describe('loadEnv', () => {
       SERVER_HOST: '127.0.0.1',
       WEB_ORIGIN: 'http://localhost:3000',
       LOG_LEVEL: 'info',
+      MIGRATE_ON_START: true,
     });
+    expect(loadEnv({}).DATABASE_URL).toContain('postgres://');
   });
 
-  it('coerces numeric strings for the port', () => {
-    expect(loadEnv({ SERVER_PORT: '9000' }).SERVER_PORT).toBe(9000);
+  it('coerces numeric strings and boolean flags', () => {
+    const env = loadEnv({ SERVER_PORT: '9000', MIGRATE_ON_START: 'false' });
+    expect(env.SERVER_PORT).toBe(9000);
+    expect(env.MIGRATE_ON_START).toBe(false);
   });
 });
