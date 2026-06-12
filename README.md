@@ -4,30 +4,37 @@ A self-hosted, multi-provider AI agent platform. Bring your own API keys and run
 
 ## Features (roadmap)
 
-| Phase | Feature | Status |
-| ----- | ------- | ------ |
-| 1 | Monorepo foundation — apps, packages, CI, Postgres | ✅ |
-| 2 | Data layer (Drizzle + Postgres), threads & settings, app shell | ⬜ |
-| 3 | Multi-provider agent loop (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Kimi, Z.ai, Qwen, Groq, OpenRouter), streaming chat | ⬜ |
-| 4 | Python sandbox — isolated code execution | ⬜ |
-| 5 | MCP servers — connect any public MCP (stdio / HTTP / SSE) | ⬜ |
-| 6 | Skills — install any public Agent Skill | ⬜ |
-| 7 | Exa web search with citations | ⬜ |
-| 8 | Memory engine — knowledge graph, hybrid recall, consolidation | ⬜ |
-| 9 | Observability — traces, token/cost analytics, conversation insights | ⬜ |
-| 10 | Production hardening — Docker images, one-command deploy | ⬜ |
+| Phase | Feature                                                                                                                           | Status |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1     | Monorepo foundation — apps, packages, CI, Postgres                                                                                | ✅     |
+| 2     | Data layer (Drizzle + Postgres), threads & settings, app shell                                                                    | ✅     |
+| 3     | Multi-provider agent loop (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Kimi, Z.ai, Qwen, Groq, OpenRouter), streaming chat | ⬜     |
+| 4     | Python sandbox — isolated code execution                                                                                          | ⬜     |
+| 5     | MCP servers — connect any public MCP (stdio / HTTP / SSE)                                                                         | ⬜     |
+| 6     | Skills — install any public Agent Skill                                                                                           | ⬜     |
+| 7     | Exa web search with citations                                                                                                     | ⬜     |
+| 8     | Memory engine — knowledge graph, hybrid recall, consolidation                                                                     | ⬜     |
+| 9     | Observability — traces, token/cost analytics, conversation insights                                                               | ⬜     |
+| 10    | Production hardening — Docker images, one-command deploy                                                                          | ⬜     |
 
 ## Architecture
 
 ```
 apps/
-  web/        Next.js 15 UI (port 3000)
+  web/        Next.js 15 UI (port 3000) — app shell, threads, settings
   server/     Fastify agent runtime — agent loop, SSE, MCP connections (port 8787)
   sandbox/    Python FastAPI executor — skill scripts & generated code (port 8788)
 packages/
-  shared/     Zod schemas, shared types, event protocol
+  shared/     Zod schemas, shared types, API contracts, provider catalog
+  db/         Drizzle ORM schema + embedded migrations (threads, messages, runs, settings)
 infra:        Postgres 16 + pgvector via docker-compose
 ```
+
+## Data & settings
+
+- **Migrations** run automatically when the server boots (`MIGRATE_ON_START=true`). They are embedded in `@hyperagent/db` — append-only, transactional, tracked in a `_migrations` table.
+- **Provider keys** resolve env-first: an environment variable (e.g. `ANTHROPIC_API_KEY`) always beats a key saved in the Settings UI. UI-saved keys are encrypted at rest with AES-256-GCM under `APP_SECRET` and are never returned by the API.
+- Supported providers: Anthropic, OpenAI, Google Gemini, xAI, DeepSeek, Mistral, Kimi (Moonshot), Z.ai (GLM), Qwen, Groq, OpenRouter.
 
 ## Prerequisites
 
@@ -58,14 +65,14 @@ Open http://localhost:3000 — the landing page shows live health status for all
 
 ## Development
 
-| Command | What it does |
-| ------- | ------------ |
-| `pnpm dev` | Run web + server in watch mode (via Turborepo) |
-| `pnpm build` | Build all TypeScript packages and apps |
-| `pnpm typecheck` | Type-check the workspace |
-| `pnpm test` | Run vitest suites |
-| `pnpm lint` / `pnpm format` | ESLint / Prettier |
-| `cd apps/sandbox && uv run pytest` | Python tests |
+| Command                            | What it does                                   |
+| ---------------------------------- | ---------------------------------------------- |
+| `pnpm dev`                         | Run web + server in watch mode (via Turborepo) |
+| `pnpm build`                       | Build all TypeScript packages and apps         |
+| `pnpm typecheck`                   | Type-check the workspace                       |
+| `pnpm test`                        | Run vitest suites                              |
+| `pnpm lint` / `pnpm format`        | ESLint / Prettier                              |
+| `cd apps/sandbox && uv run pytest` | Python tests                                   |
 
 ## Security model (v1)
 
