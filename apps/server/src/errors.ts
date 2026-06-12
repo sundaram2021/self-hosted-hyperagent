@@ -14,3 +14,12 @@ export class AppSecretMissingError extends Error {
     );
   }
 }
+
+export class ProviderKeyMissingError extends Error {
+  constructor(providerLabel: string, keyEnvVar: string) {
+    super(
+      `No API key configured for ${providerLabel}. ` +
+        `Set ${keyEnvVar} in the environment or save a key in Settings.`,
+    );
+  }
+}
