@@ -1,7 +1,7 @@
 import { PROVIDERS } from '@hyperagent/shared';
 import { describe, expect, it } from 'vitest';
 
-import { defaultModelFor, findModelPricing, MODEL_CATALOG } from './catalog.js';
+import { defaultModelFor, estimateCostUsd, findModelPricing, MODEL_CATALOG } from './catalog.js';
 
 describe('MODEL_CATALOG', () => {
   it('covers every curated provider with at least one model', () => {
@@ -33,5 +33,13 @@ describe('MODEL_CATALOG', () => {
     });
     expect(findModelPricing('anthropic', 'some-future-model')).toBeNull();
     expect(findModelPricing('kimi', 'kimi-k2-turbo-preview')).toBeNull();
+  });
+
+  it('estimates cost and degrades to null without pricing or tokens', () => {
+    expect(estimateCostUsd('anthropic', 'claude-sonnet-4-5', 1_000_000, 1_000_000)).toBeCloseTo(18);
+    expect(estimateCostUsd('anthropic', 'claude-sonnet-4-5', 500_000, 0)).toBeCloseTo(1.5);
+    expect(estimateCostUsd('kimi', 'kimi-k2-turbo-preview', 100, 100)).toBeNull();
+    expect(estimateCostUsd('anthropic', 'claude-sonnet-4-5', null, 100)).toBeNull();
+    expect(estimateCostUsd('not-a-provider', 'whatever', 100, 100)).toBeNull();
   });
 });
