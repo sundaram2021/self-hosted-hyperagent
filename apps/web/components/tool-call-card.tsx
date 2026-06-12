@@ -31,9 +31,58 @@ function StatusDot({ status }: { status: ToolCallView['status'] }) {
   return <span className="h-1.5 w-1.5 rounded-full bg-red-400" />;
 }
 
+interface SearchResultItem {
+  title: string | null;
+  url: string;
+  publishedDate?: string | null;
+  text?: string | null;
+}
+
+function isSearchResults(toolName: string, result: unknown): result is SearchResultItem[] {
+  return (
+    ['web_search', 'find_similar', 'get_page_contents'].includes(toolName) &&
+    Array.isArray(result) &&
+    result.every((item) => item && typeof item === 'object' && 'url' in item)
+  );
+}
+
+/** Search results render as citation links. */
+function SearchResultsView({ results }: { results: SearchResultItem[] }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {results.map((result, index) => (
+        <div key={index} className="rounded border border-zinc-800/60 bg-zinc-950 px-3 py-2">
+          <a
+            href={result.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-medium text-emerald-400 hover:underline"
+          >
+            {result.title || result.url}
+          </a>
+          <p className="truncate text-[11px] text-zinc-600">
+            {result.url}
+            {result.publishedDate ? ` · ${result.publishedDate}` : ''}
+          </p>
+          {result.text ? (
+            <p className="mt-1 line-clamp-3 text-[12px] leading-relaxed text-zinc-400">
+              {result.text}
+            </p>
+          ) : null}
+        </div>
+      ))}
+      {results.length === 0 ? <p className="text-xs text-zinc-500">No results.</p> : null}
+    </div>
+  );
+}
+
 /** Renders execute_code results specially; falls back to JSON for other tools. */
 function ResultView({ tool }: { tool: ToolCallView }) {
   const result = tool.result as Record<string, unknown> | undefined;
+
+  if (isSearchResults(tool.toolName, tool.result)) {
+    return <SearchResultsView results={tool.result} />;
+  }
 
   if (tool.toolName === 'execute_code' && result && typeof result === 'object') {
     const stdout = typeof result.stdout === 'string' ? result.stdout : '';
