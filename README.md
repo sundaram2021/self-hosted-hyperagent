@@ -8,8 +8,8 @@ A self-hosted, multi-provider AI agent platform. Bring your own API keys and run
 | ----- | --------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 1     | Monorepo foundation — apps, packages, CI, Postgres                                                                                | ✅     |
 | 2     | Data layer (Drizzle + Postgres), threads & settings, app shell                                                                    | ✅     |
-| 3     | Multi-provider agent loop (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Kimi, Z.ai, Qwen, Groq, OpenRouter), streaming chat | ⬜     |
-| 4     | Python sandbox — isolated code execution                                                                                          | ⬜     |
+| 3     | Multi-provider agent loop (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Kimi, Z.ai, Qwen, Groq, OpenRouter), streaming chat | ✅     |
+| 4     | Python sandbox — isolated code execution                                                                                          | ✅     |
 | 5     | MCP servers — connect any public MCP (stdio / HTTP / SSE)                                                                         | ⬜     |
 | 6     | Skills — install any public Agent Skill                                                                                           | ⬜     |
 | 7     | Exa web search with citations                                                                                                     | ⬜     |
@@ -29,6 +29,12 @@ packages/
   db/         Drizzle ORM schema + embedded migrations (threads, messages, runs, settings)
 infra:        Postgres 16 + pgvector via docker-compose
 ```
+
+## Chat & the agent loop
+
+- **11 providers, one loop**: pick any provider/model per thread (or type a custom model id). The agent runs a multi-step tool-calling loop (Vercel AI SDK) with SSE streaming, persisted runs, and telemetry spans (`llm_calls`, `tool_calls`) for the observability tab (Phase 9).
+- **execute_code tool**: the agent can run Python 3.12 or Bash in the sandbox service — per-execution temp dirs, minimal env (no secrets inherited), CPU/memory/file rlimits, 64KB output caps, and hard wall-clock timeouts that kill the whole process group.
+- Stop generation any time; partial output is persisted so a refresh shows a consistent conversation.
 
 ## Data & settings
 
